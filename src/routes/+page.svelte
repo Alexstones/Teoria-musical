@@ -7,16 +7,20 @@
   let password = '';
   let mode: 'login' | 'register' = 'login';
   let error = '';
-  let course = '';
+
+  let course: 'piano' | 'guitarra' | '' = '';
   let level: 'beginner' | 'intermediate' | 'advanced' = 'beginner';
-  let lessons: any[] = [];
+  let lessons = [];
   let currentLessonIndex = 0;
+  let selectedOption = '';
+  let showAnswer = false;
+  let score = 0;
 
   onMount(() => {
     loadUser();
   });
 
-  $: lessons = course ? lessonsData?.[course]?.[level] ?? [] : [];
+  $: lessons = course && level ? lessonsData?.[course]?.[level] ?? [] : [];
 
   async function handleSubmit() {
     error = '';
@@ -47,34 +51,51 @@
     }
   }
 
-  function selectCourse(selected: string) {
+  function selectCourse(selected: 'piano' | 'guitarra') {
     course = selected;
     level = 'beginner';
     currentLessonIndex = 0;
+    selectedOption = '';
+    showAnswer = false;
+    score = 0;
   }
 
   function onLevelChange(newLevel: 'beginner' | 'intermediate' | 'advanced') {
     level = newLevel;
     currentLessonIndex = 0;
+    selectedOption = '';
+    showAnswer = false;
+    score = 0;
+  }
+
+  function checkAnswer() {
+    const correct = lessons[currentLessonIndex].quiz?.correctAnswer;
+    if (selectedOption === correct) {
+      score += 1;
+    }
+    showAnswer = true;
   }
 
   function nextLesson() {
-    if (currentLessonIndex < lessons.length - 1) {
-      currentLessonIndex++;
-    } else {
-      alert('¡Has completado todas las lecciones de este nivel!');
-    }
+    currentLessonIndex += 1;
+    selectedOption = '';
+    showAnswer = false;
   }
 
-  function prevLesson() {
-    if (currentLessonIndex > 0) {
-      currentLessonIndex--;
-    }
+  function reset() {
+    course = '';
+    level = 'beginner';
+    currentLessonIndex = 0;
+    selectedOption = '';
+    showAnswer = false;
+    score = 0;
   }
 
   function logout() {
     user.logout();
-    course = '';
+    reset();
+    username = '';
+    password = '';
   }
 </script>
 
@@ -97,29 +118,81 @@
     <button class="logout" on:click={logout}>Cerrar sesión</button>
   </nav>
 
-  <section>
-    {#if !course}
-      <h2>Selecciona tu instrumento:</h2>
-      <button on:click={() => selectCourse('guitarra')}>🎸 Guitarra</button>
-      <button on:click={() => selectCourse('piano')}>🎹 Piano</button>
-    {:else}
-      <div class="levels">
-        <button class:active={level === 'beginner'} on:click={() => onLevelChange('beginner')}>Principiante</button>
-        <button class:active={level === 'intermediate'} on:click={() => onLevelChange('intermediate')}>Intermedio</button>
-        <button class:active={level === 'advanced'} on:click={() => onLevelChange('advanced')}>Avanzado</button>
-      </div>
+  {#if !course}
+    <h2>Selecciona tu instrumento:</h2>
+    <button on:click={() => selectCourse('guitarra')}>🎸 Guitarra</button>
+    <button on:click={() => selectCourse('piano')}>🎹 Piano</button>
+  {:else}
+    <div class="levels">
+      <button class:active={level === 'beginner'} on:click={() => onLevelChange('beginner')}>Principiante</button>
+      <button class:active={level === 'intermediate'} on:click={() => onLevelChange('intermediate')}>Intermedio</button>
+      <button class:active={level === 'advanced'} on:click={() => onLevelChange('advanced')}>Avanzado</button>
+    </div>
 
-      {#if lessons.length > 0}
-        <h3>Lección {currentLessonIndex + 1} de {lessons.length}</h3>
-        <p>{lessons[currentLessonIndex]}</p>
+    {#if lessons.length > 0}
+      <h3>Lección {currentLessonIndex + 1} de {lessons.length}</h3>
+      <h4>{lessons[currentLessonIndex].title}</h4>
+      <p>{lessons[currentLessonIndex].content}</p>
 
-        <button on:click={prevLesson} disabled={currentLessonIndex === 0}>Anterior</button>
-        <button on:click={nextLesson} disabled={currentLessonIndex === lessons.length - 1}>Siguiente</button>
-      {:else}
-        <p>No hay lecciones para este nivel.</p>
+      {#if lessons[currentLessonIndex].imageUrl}
+        <img src={lessons[currentLessonIndex].imageUrl} alt="Imagen lección" style="max-width: 100%; margin: 1rem 0;" />
       {/if}
+
+      {#if lessons[currentLessonIndex].videoUrl}
+        <iframe
+          width="560"
+          height="315"
+          src={lessons[currentLessonIndex].videoUrl}
+          title="Video de la lección"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+          style="max-width: 100%; margin: 1rem 0;"
+        ></iframe>
+      {/if}
+
+      <div class="quiz">
+        <p><strong>{lessons[currentLessonIndex].quiz?.question}</strong></p>
+        <ul>
+          {#each lessons[currentLessonIndex].quiz?.options as option}
+            <li>
+              <label>
+                <input
+                  type="radio"
+                  name="quiz"
+                  value={option}
+                  bind:group={selectedOption}
+                  disabled={showAnswer}
+                />
+                {option}
+              </label>
+            </li>
+          {/each}
+        </ul>
+
+        {#if !showAnswer}
+          <button on:click={checkAnswer} disabled={!selectedOption}>Revisar</button>
+        {/if}
+
+        {#if showAnswer}
+          <p>
+            {selectedOption === lessons[currentLessonIndex].quiz?.correctAnswer
+              ? '✅ ¡Correcto!'
+              : `❌ Incorrecto. La respuesta correcta era: ${lessons[currentLessonIndex].quiz?.correctAnswer}`}
+          </p>
+          {#if currentLessonIndex < lessons.length - 1}
+            <button on:click={nextLesson}>Siguiente lección</button>
+          {:else}
+            <h3>Lecciones completadas ✅</h3>
+            <p>Puntaje final: {score} / {lessons.length}</p>
+            <button on:click={reset}>Reiniciar</button>
+          {/if}
+        {/if}
+      </div>
+    {:else}
+      <p>No hay lecciones disponibles para este nivel.</p>
     {/if}
-  </section>
+  {/if}
 {/if}
 
 <style>
@@ -152,5 +225,14 @@
 
   section {
     padding: 1rem;
+  }
+
+  .quiz ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .quiz li {
+    margin: 0.5rem 0;
   }
 </style>
